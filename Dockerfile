@@ -16,8 +16,11 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 # Railway sẽ tự động set PORT environment variable
-ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
-EXPOSE $PORT
+# Sử dụng PORT từ environment hoặc mặc định 8080
+ENV PORT=8080
+ENV ASPNETCORE_URLS=http://+:${PORT}
+
+EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "MaiAmTinhThuong.dll"]
 

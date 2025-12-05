@@ -76,10 +76,12 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    app.UseHsts();
+    // Không dùng HSTS trên Railway vì Railway tự xử lý HTTPS
+    // app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Tắt HTTPS redirection trên Railway (Railway tự xử lý HTTPS)
+// app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
@@ -119,49 +121,69 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Khởi tạo database và seed data (wrap trong try-catch để không crash app)
 using (var scope = app.Services.CreateScope())
 {
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-
-    // Tạo role Admin nếu chưa có
-    if (!await roleManager.RoleExistsAsync("Admin"))
-        await roleManager.CreateAsync(new IdentityRole("Admin"));
-
-    // Tạo user admin
-    var adminEmail = "admin@localhost.com";
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
-    if (adminUser == null)
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
     {
-        var user = new ApplicationUser
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        
+        // Chỉ chạy nếu database có thể kết nối
+        if (db.Database.CanConnect())
         {
-            UserName = adminEmail,
-            Email = adminEmail,
-            FullName = "Quản trị viên",
-            ProfilePicture = "default1-avatar.png",  // Cung cấp giá trị mặc định
-            Role = "Admin",
-            EmailConfirmed = true
-        };
-        var result = await userManager.CreateAsync(user, "Admin@123");
-        if (result.Succeeded)
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+            // Tạo role Admin nếu chưa có
+            if (!await roleManager.RoleExistsAsync("Admin"))
+                await roleManager.CreateAsync(new IdentityRole("Admin"));
+
+            // Tạo user admin
+            var adminEmail = "admin@localhost.com";
+            var adminUser = await userManager.FindByEmailAsync(adminEmail);
+            if (adminUser == null)
+            {
+                var user = new ApplicationUser
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    FullName = "Quản trị viên",
+                    ProfilePicture = "default1-avatar.png",
+                    Role = "Admin",
+                    EmailConfirmed = true
+                };
+                var result = await userManager.CreateAsync(user, "Admin@123");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(user, "Admin");
+                }
+            }
+
+            // Seed BotRules
+            if (!db.BotRules.Any())
+            {
+                db.BotRules.AddRange(new[]
+                {
+                    new BotRule { Trigger = "xin chào", MatchType = MatchType.Contains, Response = "Chào bạn! Mình có thể giúp gì cho bạn?", Priority = 100 },
+                    new BotRule { Trigger = "đóng góp", MatchType = MatchType.Contains, Response = "Bạn có thể đóng góp tại /DongGop hoặc liên hệ số (+84) 902115231.", Priority = 90 },
+                    new BotRule { Trigger = "giờ làm việc", MatchType = MatchType.Exact, Response = "Mái Ấm mở cửa: 8:00 - 17:00 (T2-T7).", Priority = 80 },
+                    new BotRule { Trigger = "lien he", MatchType = MatchType.Regex, Response = "Bạn có thể gọi (+84)902115231 hoặc email MaiAmYeuThuong@gmail.com", Priority = 70 }
+                });
+                db.SaveChanges();
+            }
+            
+            logger.LogInformation("Database initialization completed successfully.");
+        }
+        else
         {
-            await userManager.AddToRoleAsync(user, "Admin");
+            logger.LogWarning("Cannot connect to database. Skipping initialization. Please check connection string.");
         }
     }
-}
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    if (!db.BotRules.Any())
+    catch (Exception ex)
     {
-        db.BotRules.AddRange(new[]
-        {
-            new BotRule { Trigger = "xin chào", MatchType = MatchType.Contains, Response = "Chào bạn! Mình có thể giúp gì cho bạn?", Priority = 100 },
-            new BotRule { Trigger = "đóng góp", MatchType = MatchType.Contains, Response = "Bạn có thể đóng góp tại /DongGop hoặc liên hệ số (+84) 902115231.", Priority = 90 },
-            new BotRule { Trigger = "giờ làm việc", MatchType = MatchType.Exact, Response = "Mái Ấm mở cửa: 8:00 - 17:00 (T2-T7).", Priority = 80 },
-            new BotRule { Trigger = "lien he", MatchType = MatchType.Regex, Response = "Bạn có thể gọi (+84)902115231 hoặc email MaiAmYeuThuong@gmail.com", Priority = 70 }
-        });
-        db.SaveChanges();
+        logger.LogError(ex, "An error occurred during database initialization. App will continue but some features may not work.");
+        // Không throw exception để app vẫn có thể start
     }
 }
 

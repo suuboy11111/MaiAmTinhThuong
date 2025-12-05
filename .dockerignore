@@ -8,4 +8,4 @@ obj/
 .gitignore
 *.md
 !README.md
-
+.vscode/

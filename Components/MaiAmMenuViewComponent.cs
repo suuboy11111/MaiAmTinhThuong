@@ -17,8 +17,25 @@ namespace MaiAmTinhThuong.Components
 
         public async Task<IViewComponentResult> InvokeAsync()
         {
-            var maiAms = await _context.MaiAms.OrderBy(m => m.Id).ToListAsync();
-            return View(maiAms);
+            try
+            {
+                // Kiểm tra database có thể kết nối được không
+                if (_context.Database.CanConnect())
+                {
+                    var maiAms = await _context.MaiAms.OrderBy(m => m.Id).ToListAsync();
+                    return View(maiAms);
+                }
+                else
+                {
+                    // Trả về empty list nếu không kết nối được
+                    return View(new List<Models.MaiAm>());
+                }
+            }
+            catch
+            {
+                // Trả về empty list nếu có lỗi
+                return View(new List<Models.MaiAm>());
+            }
         }
     }
 }

@@ -69,6 +69,18 @@ if (string.IsNullOrEmpty(connectionString))
 if (string.IsNullOrEmpty(connectionString))
 {
     connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    
+    // Nếu connection string có postgres.railway.internal nhưng không có PGHOST, thử dùng PGHOST
+    if (!string.IsNullOrEmpty(connectionString) && 
+        connectionString.Contains("postgres.railway.internal", StringComparison.OrdinalIgnoreCase))
+    {
+        var pgHost = builder.Configuration["PGHOST"];
+        if (!string.IsNullOrEmpty(pgHost))
+        {
+            // Thay thế postgres.railway.internal bằng PGHOST
+            connectionString = connectionString.Replace("postgres.railway.internal", pgHost, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 }
 
 // Xác định loại database và cấu hình

@@ -15,8 +15,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
 COPY --from=build /app/publish .
 
-EXPOSE 8080
-ENV ASPNETCORE_URLS=http://+:8080
+# Railway sẽ tự động set PORT environment variable
+ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
+EXPOSE $PORT
 
 ENTRYPOINT ["dotnet", "MaiAmTinhThuong.dll"]
 

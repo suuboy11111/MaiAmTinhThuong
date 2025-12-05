@@ -59,7 +59,11 @@ builder.Services.AddSingleton<PayOSClient>(serviceProvider =>
 
     if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(checksumKey))
     {
-        throw new InvalidOperationException("PayOS configuration is missing. Please check appsettings.json");
+        // Log warning nhưng không throw exception để app vẫn chạy được
+        var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("PayOS configuration is missing. Payment features will not work. Please set PayOS:ClientId, PayOS:ApiKey, and PayOS:ChecksumKey environment variables.");
+        // Trả về PayOSClient với empty strings - sẽ fail khi sử dụng nhưng không crash app
+        return new PayOSClient("", "", "");
     }
 
     return new PayOSClient(clientId, apiKey, checksumKey);
@@ -89,20 +93,29 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// Tự động chạy migration khi khởi động (Production)
+// Tự động chạy migration khi khởi động
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
-        // Chạy migration tự động
-        db.Database.Migrate();
-        logger.LogInformation("Database migration completed successfully.");
+        // Kiểm tra database có thể kết nối được không
+        if (db.Database.CanConnect())
+        {
+            // Chạy migration tự động
+            db.Database.Migrate();
+            logger.LogInformation("Database migration completed successfully.");
+        }
+        else
+        {
+            logger.LogWarning("Cannot connect to database. Please check connection string.");
+        }
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "An error occurred while migrating the database.");
+        logger.LogError(ex, "An error occurred while migrating the database. App will continue but database operations may fail.");
+        // Không throw exception để app vẫn có thể start
     }
 }
 
